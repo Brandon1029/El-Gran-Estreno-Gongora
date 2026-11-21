@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cuenta Regresiva</title>
+
+  <!-- Google Fonts: Plus Jakarta Sans & JetBrains Mono para números tabulares -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
+    rel="stylesheet"
+  />
+
+  <style>
+    :root {
+      --bg-deep: #06070a;
+      --bg-card: rgba(255, 255, 255, 0.035);
+      --bg-card-hover: rgba(255, 255, 255, 0.055);
+      --border-subtle: rgba(255, 255, 255, 0.08);
+      --border-glow: rgba(129, 140, 248, 0.35);
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --accent-primary: #818cf8;
+      --accent-secondary: #38bdf8;
+      --accent-completed: #34d399;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100dvh;
+      overflow: hidden;
+      background-color: var(--bg-deep);
+      color: var(--text-primary);
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      user-select: none;
+    }
+
+    /* Fondo ambiental con luces difuminadas */
+    .ambient-bg {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(circle at 50% 0%, rgba(129, 140, 248, 0.14) 0%, transparent 55%),
+        radial-gradient(circle at 85% 85%, rgba(56, 189, 248, 0.08) 0%, transparent 45%),
+        radial-gradient(circle at 15% 85%, rgba(167, 139, 250, 0.07) 0%, transparent 45%);
+      transition: background 1.2s ease;
+    }
+
+    body.is-completed .ambient-bg {
+      background:
+        radial-gradient(circle at 50% 20%, rgba(52, 211, 153, 0.18) 0%, transparent 60%),
+        radial-gradient(circle at 80% 80%, rgba(56, 189, 248, 0.12) 0%, transparent 50%);
+    }
+
+    /* Canvas para partículas / confeti minimalista al terminar */
+    #confetti-canvas {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+      pointer-events: none;
+    }
+
+    /* Contenedor principal centrado en 100vh sin scroll */
+    .main-container {
+      position: relative;
+      z-index: 2;
+      width: 100%;
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: clamp(1rem, 4vw, 3rem);
+      text-align: center;
+    }
+
+    .content-wrapper {
+      width: 100%;
+      max-width: 880px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: clamp(1.75rem, 4.5vh, 3.25rem);
+    }
+
+    /* Encabezado y título del evento */
+    .header {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.85rem;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.35rem 0.9rem;
+      border-radius: 9999px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border-subtle);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      font-size: clamp(0.7rem, 1.5vw, 0.8rem);
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+      transition: all 0.5s ease;
+    }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--accent-primary);
+      box-shadow: 0 0 10px var(--accent-primary);
+      animation: pulse-dot 2s infinite ease-in-out;
+    }
+
+    body.is-completed .status-dot {
+      background: var(--accent-completed);
+      box-shadow: 0 0 12px var(--accent-completed);
+    }
+
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.45; transform: scale(0.85); }
+    }
+
+    .event-title {
+      font-size: clamp(1.6rem, 4.5vw, 3.1rem);
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      line-height: 1.15;
+      background: linear-gradient(135deg, #ffffff 30%, #94a3b8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      max-width: 24ch;
+    }
+
+    .event-date-label {
+      font-size: clamp(0.82rem, 1.6vw, 0.98rem);
+      color: var(--text-muted);
+      font-weight: 400;
+      letter-spacing: 0.02em;
+    }
+
+    /* Cuadrícula de tarjetas del cronómetro */
+    .countdown-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: clamp(0.65rem, 2.2vw, 1.5rem);
+      width: 100%;
+    }
+
+    .time-card {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: clamp(1.1rem, 3.2vw, 2.25rem) clamp(0.5rem, 1.5vw, 1.25rem);
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: clamp(16px, 2.5vw, 24px);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      box-shadow:
+        0 20px 40px -20px rgba(0, 0, 0, 0.7),
+        inset 0 1px 0 0 rgba(255, 255, 255, 0.09);
+      overflow: hidden;
+      transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+                  border-color 0.35s ease,
+                  background-color 0.35s ease,
+                  box-shadow 0.5s ease;
+    }
+
+    /* Brillo superior sutil en cada tarjeta */
+    .time-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 20%;
+      right: 20%;
+      height: 1px;
+      background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(129, 140, 248, 0.45),
+        transparent
+      );
+      opacity: 0.75;
+      transition: opacity 0.35s ease, background 0.5s ease;
+    }
+
+    .time-card:hover {
+      transform: translateY(-3px);
+      background: var(--bg-card-hover);
+      border-color: var(--border-glow);
+    }
+
+    body.is-completed .time-card {
+      border-color: rgba(52, 211, 153, 0.35);
+      box-shadow:
+        0 20px 50px -15px rgba(52, 211, 153, 0.15),
+        inset 0 1px 0 0 rgba(52, 211, 153, 0.2);
+    }
+
+    body.is-completed .time-card::before {
+      background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(52, 211, 153, 0.75),
+        transparent
+      );
+    }
+
+    .time-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-variant-numeric: tabular-nums;
+      font-size: clamp(2rem, 7vw, 4.75rem);
+      font-weight: 700;
+      line-height: 1;
+      letter-spacing: -0.04em;
+      color: var(--text-primary);
+      text-shadow: 0 0 32px rgba(129, 140, 248, 0.22);
+      transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1),
+                  color 0.28s ease,
+                  opacity 0.28s ease;
+    }
+
+    /* Animación suave cuando cambia un número */
+    .time-value.tick-animate {
+      transform: translateY(-3px) scale(1.03);
+      color: #c7d2fe;
+    }
+
+    body.is-completed .time-value {
+      color: var(--accent-completed);
+      text-shadow: 0 0 32px rgba(52, 211, 153, 0.3);
+    }
+
+    .time-label {
+      margin-top: clamp(0.5rem, 1.2vw, 0.85rem);
+      font-size: clamp(0.65rem, 1.3vw, 0.82rem);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      color: var(--text-secondary);
+    }
+
+    /* Sección inferior: Barra de progreso y mensaje final */
+    .footer-section {
+      width: 100%;
+      max-width: 520px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .progress-wrapper {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      transition: opacity 0.4s ease;
+    }
+
+    .progress-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.75rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      letter-spacing: 0.04em;
+    }
+
+    .progress-track {
+      width: 100%;
+      height: 5px;
+      background: rgba(255, 255, 255, 0.06);
+      border-radius: 999px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .progress-bar {
+      height: 100%;
+      width: 0%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
+      box-shadow: 0 0 12px rgba(129, 140, 248, 0.55);
+      transition: width 0.8s cubic-bezier(0.22, 1, 0.36, 1), background 0.5s ease;
+    }
+
+    body.is-completed .progress-bar {
+      background: linear-gradient(90deg, var(--accent-completed), var(--accent-secondary));
+      box-shadow: 0 0 14px rgba(52, 211, 153, 0.65);
+    }
+
+    /* Mensaje cuando la cuenta regresiva llega a cero */
+    .completed-banner {
+      display: none;
+      margin-top: 0.35rem;
+      padding: 0.85rem 1.5rem;
+      border-radius: 999px;
+      background: rgba(52, 211, 153, 0.1);
+      border: 1px solid rgba(52, 211, 153, 0.35);
+      color: #a7f3d0;
+      font-size: clamp(0.95rem, 2vw, 1.15rem);
+      font-weight: 600;
+      letter-spacing: 0.01em;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      box-shadow: 0 10px 30px -10px rgba(52, 211, 153, 0.25);
+      animation: fade-slide-up 0.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    }
+
+    body.is-completed .completed-banner {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    @keyframes fade-slide-up {
+      from {
+        opacity: 0;
+        transform: translateY(10px) scale(0.97);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    /* Ajustes para pantallas móviles muy pequeñas */
+    @media (max-width: 480px) {
+      .countdown-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.85rem;
+        max-width: 340px;
+      }
+
+      .time-card {
+        padding: 1.35rem 0.75rem;
+      }
+
+      .time-value {
+        font-size: clamp(2.25rem, 11vw, 3.2rem);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="ambient-bg" aria-hidden="true"></div>
+  <canvas id="confetti-canvas" aria-hidden="true"></canvas>
+
+  <main class="main-container">
+    <div class="content-wrapper">
+      <!-- Encabezado -->
+      <header class="header">
+        <div class="status-badge">
+          <span class="status-dot"></span>
+          <span id="badge-text">Cuenta regresiva activa</span>
+        </div>
+        <h1 id="event-title" class="event-title">Cargando evento...</h1>
+        <p id="event-target-label" class="event-date-label"></p>
+      </header>
+
+      <!-- Bloques del cronómetro -->
+      <section class="countdown-grid" aria-label="Tiempo restante">
+        <div class="time-card">
+          <span id="days" class="time-value">00</span>
+          <span class="time-label">Días</span>
+        </div>
+        <div class="time-card">
+          <span id="hours" class="time-value">00</span>
+          <span class="time-label">Horas</span>
+        </div>
+        <div class="time-card">
+          <span id="minutes" class="time-value">00</span>
+          <span class="time-label">Minutos</span>
+        </div>
+        <div class="time-card">
+          <span id="seconds" class="time-value">00</span>
+          <span class="time-label">Segundos</span>
+        </div>
+      </section>
+
+      <!-- Barra de progreso y mensaje al finalizar -->
+      <footer class="footer-section">
+        <div id="progress-wrapper" class="progress-wrapper">
+          <div class="progress-header">
+            <span>Progreso</span>
+            <span id="progress-percentage">0%</span>
+          </div>
+          <div class="progress-track">
+            <div id="progress-bar" class="progress-bar"></div>
+          </div>
+        </div>
+
+        <div id="completed-banner" class="completed-banner" role="status" aria-live="polite">
+          <span id="completed-message"></span>
+        </div>
+      </footer>
+    </div>
+  </main>
+
+  <script>
+    /* ==========================================================================
+       ⚙️ CONFIGURACIÓN DE LA CUENTA REGRESIVA (EDITA AQUÍ)
+       ========================================================================== */
+    const CONFIG = {
+      // 1. Título principal del evento
+      title: "Estreno de Jorge Hector Gongora Rojas",
+
+      // 2. Fecha y hora objetivo (Formato ISO: YYYY-MM-DDTHH:mm:ss)
+      targetDate: "2026-11-24T10:00:00",
+
+      // 3. Mensaje que se mostrará cuando el contador llegue a 00:00:00:00
+      completedMessage: "✨ ¡El momento ha llegado! El evento ya está disponible.",
+
+      // 4. (Opcional) Fecha de inicio para calcular el % de la barra de progreso
+      startDate: "2026-11-21T13:55:00",
+
+      // 5. (Opcional) Mostrar barra de progreso debajo del contador (true / false)
+      showProgressBar: true
+    };
+    /* ========================================================================== */
+
+    const els = {
+      title: document.getElementById("event-title"),
+      badgeText: document.getElementById("badge-text"),
+      targetLabel: document.getElementById("event-target-label"),
+      days: document.getElementById("days"),
+      hours: document.getElementById("hours"),
+      minutes: document.getElementById("minutes"),
+      seconds: document.getElementById("seconds"),
+      progressWrapper: document.getElementById("progress-wrapper"),
+      progressBar: document.getElementById("progress-bar"),
+      progressPercentage: document.getElementById("progress-percentage"),
+      completedMessage: document.getElementById("completed-message")
+    };
+
+    const targetTimestamp = new Date(CONFIG.targetDate).getTime();
+    const startTimestamp = CONFIG.startDate
+      ? new Date(CONFIG.startDate).getTime()
+      : Date.now() - 1000 * 60 * 60 * 24 * 30;
+
+    let previousValues = { days: null, hours: null, minutes: null, seconds: null };
+    let isCompleted = false;
+    let timerInterval = null;
+
+    // Inicializar textos e interfaz
+    function initUI() {
+      document.title = CONFIG.title;
+      els.title.textContent = CONFIG.title;
+      els.completedMessage.textContent = CONFIG.completedMessage;
+
+      if (!CONFIG.showProgressBar) {
+        els.progressWrapper.style.display = "none";
+      }
+
+      if (!isNaN(targetTimestamp)) {
+        const dateFormatter = new Intl.DateTimeFormat("es-ES", {
+          dateStyle: "full",
+          timeStyle: "short"
+        });
+        els.targetLabel.textContent = dateFormatter.format(new Date(targetTimestamp));
+      } else {
+        els.targetLabel.textContent = "Fecha objetivo inválida en CONFIG.targetDate";
+      }
+    }
+
+    // Formatear número siempre a 2 dígitos (ej. 09)
+    function formatTwoDigits(num) {
+      return String(Math.max(0, num)).padStart(2, "0");
+    }
+
+    // Actualizar valor con animación sutil si cambió el número
+    function updateDigit(element, key, newValue) {
+      const formatted = formatTwoDigits(newValue);
+      if (previousValues[key] !== formatted) {
+        element.textContent = formatted;
+        if (previousValues[key] !== null) {
+          element.classList.remove("tick-animate");
+          void element.offsetWidth; // Reiniciar transición
+          element.classList.add("tick-animate");
+          setTimeout(() => element.classList.remove("tick-animate"), 260);
+        }
+        previousValues[key] = formatted;
+      }
+    }
+
+    // Actualizar barra de progreso
+    function updateProgress(now) {
+      if (!CONFIG.showProgressBar || isNaN(targetTimestamp) || isNaN(startTimestamp)) return;
+      const totalDuration = targetTimestamp - startTimestamp;
+      if (totalDuration <= 0) return;
+
+      const elapsed = now - startTimestamp;
+      const percent = Math.min(100, Math.max(0, (elapsed / totalDuration) * 100));
+      const formattedPercent = percent >= 99.9 && percent < 100
+        ? "99.9%"
+        : `${percent.toFixed(1)}%`;
+
+      els.progressBar.style.width = `${percent}%`;
+      els.progressPercentage.textContent = percent >= 100 ? "100%" : formattedPercent;
+    }
+
+    // Cálculo principal cada segundo
+    function tick() {
+      const now = Date.now();
+      const diff = targetTimestamp - now;
+
+      if (isNaN(targetTimestamp)) return;
+
+      if (diff <= 0) {
+        updateDigit(els.days, "days", 0);
+        updateDigit(els.hours, "hours", 0);
+        updateDigit(els.minutes, "minutes", 0);
+        updateDigit(els.seconds, "seconds", 0);
+        updateProgress(targetTimestamp);
+
+        if (!isCompleted) {
+          isCompleted = true;
+          onCountdownFinished();
+        }
+        if (timerInterval) clearInterval(timerInterval);
+        return;
+      }
+
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+      const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
+      const minutes = Math.floor((diff / 1000 / 60) % 60);
+      const seconds = Math.floor((diff / 1000) % 60);
+
+      updateDigit(els.days, "days", days);
+      updateDigit(els.hours, "hours", hours);
+      updateDigit(els.minutes, "minutes", minutes);
+      updateDigit(els.seconds, "seconds", seconds);
+      updateProgress(now);
+    }
+
+    // Acción al llegar a cero
+    function onCountdownFinished() {
+      document.body.classList.add("is-completed");
+      els.badgeText.textContent = "Evento completado";
+      launchMinimalConfetti();
+    }
+
+    // Efecto visual sutil: partículas/confeti minimalista en Canvas
+    function launchMinimalConfetti() {
+      const canvas = document.getElementById("confetti-canvas");
+      const ctx = canvas.getContext("2d");
+      let width = (canvas.width = window.innerWidth);
+      let height = (canvas.height = window.innerHeight);
+
+      window.addEventListener("resize", () => {
+        width = canvas.width = window.innerWidth;
+        height = canvas.height = window.innerHeight;
+      });
+
+      const palette = ["#34d399", "#38bdf8", "#818cf8", "#a7f3d0", "#e2e8f0"];
+      const particles = Array.from({ length: 75 }, () => ({
+        x: width * 0.5 + (Math.random() - 0.5) * 180,
+        y: height * 0.45 + (Math.random() - 0.5) * 60,
+        vx: (Math.random() - 0.5) * 9,
+        vy: -Math.random() * 8 - 2,
+        size: Math.random() * 5 + 3,
+        color: palette[Math.floor(Math.random() * palette.length)],
+        alpha: 1,
+        rotation: Math.random() * Math.PI * 2,
+        vRot: (Math.random() - 0.5) * 0.12
+      }));
+
+      function renderFrame() {
+        ctx.clearRect(0, 0, width, height);
+        let activeParticles = 0;
+
+        for (const p of particles) {
+          if (p.alpha <= 0.01) continue;
+          activeParticles++;
+
+          p.x += p.vx;
+          p.y += p.vy;
+          p.vy += 0.14; // Gravedad suave
+          p.vx *= 0.99; // Fricción de aire
+          p.rotation += p.vRot;
+          p.alpha -= 0.0055;
+
+          ctx.save();
+          ctx.globalAlpha = Math.max(0, p.alpha);
+          ctx.translate(p.x, p.y);
+          ctx.rotate(p.rotation);
+          ctx.fillStyle = p.color;
+          ctx.beginPath();
+          ctx.roundRect(-p.size / 2, -p.size / 2, p.size * 1.4, p.size * 0.8, 2);
+          ctx.fill();
+          ctx.restore();
+        }
+
+        if (activeParticles > 0) {
+          requestAnimationFrame(renderFrame);
+        } else {
+          ctx.clearRect(0, 0, width, height);
+        }
+      }
+
+      requestAnimationFrame(renderFrame);
+    }
+
+    initUI();
+    tick();
+    timerInterval = setInterval(tick, 1000);
+  </script>
+</body>
+</html>
